@@ -1,17 +1,24 @@
-import {MnistData, DIGIT_WIDTH, DIGIT_HEIGHT, NUM_CLASSES} from './data.js'
+import MnistData, {
+	DIGIT_WIDTH,
+	DIGIT_HEIGHT,
+	NUM_CLASSES,
+	NUM_DATASET_ELEMENTS,
+	NUM_TEST_ELEMENTS,
+	NUM_TRAIN_ELEMENTS,
+} from './data.js'
 
 async function showExamples(data) {
 	// Create a container in the visor
 	const surface =
-			tfvis.visor().surface({ name: 'Input Data Examples', tab: 'Input Data'})
+			tfvis.visor().surface({name: 'Input Data Examples', tab: 'Input Data'})
 	
 	// Get the examples
 	const examples = data.nextTestBatch(20)
 	const numExamples = examples.xs.shape[0]
-	console.log(examples.xs)
+
 	// Create a canvas element to render each example
 	for (let i = 0; i < numExamples; i++) {
-			// Reshape the image to DIGIT_HEIGHT x DIGIT_WIDTH px
+		// Reshape the image to DIGIT_HEIGHT x DIGIT_WIDTH px
 		const imageTensor = tf.tidy(() =>
 				examples.xs
 						.slice([i, 0], [1, examples.xs.shape[1]])
@@ -100,13 +107,13 @@ function getModel() {
 async function train(model, data) {
 	const metrics = ['loss', 'val_loss', 'acc', 'val_acc']
 	const container = {
-		name: 'Model Training', styles: { height: '1000px' }
+		name: 'Model Training', styles: {height: '1000px'}
 	}
 	const fitCallbacks = tfvis.show.fitCallbacks(container, metrics)
 	
-	const BATCH_SIZE = 20
-	const TRAIN_DATA_SIZE = 54
-	const TEST_DATA_SIZE = 20
+	const BATCH_SIZE = 512
+	const TRAIN_DATA_SIZE = NUM_TRAIN_ELEMENTS
+	const TEST_DATA_SIZE = NUM_TEST_ELEMENTS
 	
 	const [trainXs, trainYs] = tf.tidy(() => {
 		const d = data.nextTrainBatch(TRAIN_DATA_SIZE)
@@ -120,11 +127,11 @@ async function train(model, data) {
 		const d = data.nextTestBatch(TEST_DATA_SIZE)
 		//console.log(d.xs)
 		return [
-			d.xs.reshape([TEST_DATA_SIZE,  DIGIT_HEIGHT, DIGIT_WIDTH, 1]),
+			d.xs.reshape([TEST_DATA_SIZE, DIGIT_HEIGHT, DIGIT_WIDTH, 1]),
 			d.labels,
 		]
 	})
-	console.log('XXXXXXXXXXXXXXXXXXXXXXXXXXXX')
+	
 	return model.fit(trainXs, trainYs, {
 		batchSize: BATCH_SIZE,
 		validationData: [testXs, testYs],
@@ -136,9 +143,9 @@ async function train(model, data) {
 
 const classNames = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
 
-function doPrediction(model, data, testDataSize = 50) {
-	const IMAGE_WIDTH =  DIGIT_WIDTH
-	const IMAGE_HEIGHT =  DIGIT_HEIGHT
+function doPrediction(model, data, testDataSize = 500) {
+	const IMAGE_WIDTH = DIGIT_WIDTH
+	const IMAGE_HEIGHT = DIGIT_HEIGHT
 	const testData = data.nextTestBatch(testDataSize)
 	const testxs = testData.xs.reshape([testDataSize, IMAGE_WIDTH, IMAGE_HEIGHT, 1])
 	const labels = testData.labels.argMax([-1])
@@ -175,9 +182,9 @@ async function run() {
 	
 	const model = getModel()
 	tfvis.show.modelSummary({name: 'Model Architecture'}, model)
-
+	
 	await train(model, data)
-
+	
 	await showAccuracy(model, data)
 	await showConfusion(model, data)
 }

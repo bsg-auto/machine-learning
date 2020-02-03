@@ -1,6 +1,7 @@
 # Created by .ignore support plugin (hsz.mobi)
 .idea/
 node_modules/
+/modules/
 *.iml
 
 /mnist_images.png

@@ -1,5 +1,7 @@
 'use strict'
 
+import labels from './labels.js'
+
 const IMAGE_WIDTH = 100
 const IMAGE_HEIGHT = 32
 const IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT
@@ -13,81 +15,14 @@ export const DIGIT_HEIGHT = 20
 const DIGIT_SIZE = DIGIT_WIDTH * DIGIT_HEIGHT
 
 export const NUM_CLASSES = 10
-const NUM_IMAGES = 64
-const NUM_TRAIN_IMAGES = 54
-const NUM_DATASET_ELEMENTS = NUM_IMAGES * NUM_DIGITS_PER_IMAGE
+const NUM_IMAGES = labels.length
+const NUM_TRAIN_IMAGES = 850
 
-const NUM_TRAIN_ELEMENTS = NUM_TRAIN_IMAGES * NUM_DIGITS_PER_IMAGE
-const NUM_TEST_ELEMENTS = NUM_DATASET_ELEMENTS - NUM_TRAIN_ELEMENTS
+export const NUM_DATASET_ELEMENTS = NUM_IMAGES * NUM_DIGITS_PER_IMAGE
+export const NUM_TRAIN_ELEMENTS = NUM_TRAIN_IMAGES * NUM_DIGITS_PER_IMAGE
+export const NUM_TEST_ELEMENTS = NUM_DATASET_ELEMENTS - NUM_TRAIN_ELEMENTS
 
 const MNIST_LABELS_PATH = 'mnist_labels_uint8' //'https://storage.googleapis.com/learnjs-data/model-builder/mnist_labels_uint8'
-
-const labels = [
-	'14142',
-	'14298',
-	'14549',
-	'15359',
-	'15653',
-	'17721',
-	'18066',
-	'20589',
-	'23029',
-	'25028',
-	'25575',
-	'28298',
-	'29135',
-	'29262',
-	'29635',
-	'29809',
-	'30400',
-	'31868',
-	'32015',
-	'32314',
-	'32448',
-	'33002',
-	'38397',
-	'41463',
-	'41646',
-	'47402',
-	'50430',
-	'50589',
-	'53034',
-	'56581',
-	'60176',
-	'60474',
-	'60674',
-	'63876',
-	'66492',
-	'66932',
-	'67348',
-	'69442',
-	'71361',
-	'72262',
-	'76084',
-	'76683',
-	'77761',
-	'80054',
-	'80340',
-	'81442',
-	'81700',
-	'83220',
-	'83569',
-	'83609',
-	'83759',
-	'84772',
-	'84887',
-	'85561',
-	'85762',
-	'86157',
-	'86565',
-	'87807',
-	'90977',
-	'92599',
-	'94420',
-	'96986',
-	'98429',
-	'99349',
-]
 
 /**
  * A class that fetches the sprited MNIST dataset and returns shuffled batches.
@@ -95,7 +30,7 @@ const labels = [
  * NOTE: This will get much easier. For now, we do data fetching and
  * manipulation manually.
  */
-export class MnistData {
+export default class MnistData {
 	constructor() {
 		this.shuffledTrainIndex = 0
 		this.shuffledTestIndex = 0
@@ -140,8 +75,8 @@ export class MnistData {
 								const extraPixels = DIGIT_WIDTH - (right - left)
 								
 								for (let y = top; y < bottom; y++) {
-									for (let i = 0; i < extraPixels/2; i++) imagePixels[index++] = 0
-		
+									for (let i = 0; i < extraPixels / 2; i++) imagePixels[index++] = 0
+									
 									for (let x = left; x < right; x++) {
 										// All channels hold an equal value since the image is almost grayscale, so
 										// just read the blue channel (red + 2).
@@ -160,7 +95,7 @@ export class MnistData {
 										// }
 									}
 									
-									for (let i = 0; i < extraPixels/2; i++) imagePixels[index++] = 0
+									for (let i = 0; i < extraPixels / 2; i++) imagePixels[index++] = 0
 								}
 								
 								imagesPixels[i] = imagePixels
@@ -211,8 +146,8 @@ export class MnistData {
 		this.testIndices = tf.util.createShuffledIndices(NUM_TEST_ELEMENTS)
 		
 		// Slice the the images and labels into train and test sets.
-		const bound1 = DIGIT_SIZE * NUM_TRAIN_ELEMENTS
-		const bound2 = NUM_CLASSES * NUM_TRAIN_ELEMENTS
+		const bound1 = NUM_TRAIN_ELEMENTS * DIGIT_SIZE
+		const bound2 =  NUM_TRAIN_ELEMENTS * NUM_CLASSES
 		
 		this.trainImages = this.datasetImages.slice(0, bound1)
 		this.testImages = this.datasetImages.slice(bound1)
@@ -222,7 +157,7 @@ export class MnistData {
 	
 	nextTrainBatch(batchSize) {
 		return this.nextBatch(
-				batchSize, [this.trainImages, this.trainLabels], () => {
+				batchSize, this.trainImages, this.trainLabels, () => {
 					this.shuffledTrainIndex =
 							(this.shuffledTrainIndex + 1) % this.trainIndices.length
 					return this.trainIndices[this.shuffledTrainIndex]
@@ -230,24 +165,24 @@ export class MnistData {
 	}
 	
 	nextTestBatch(batchSize) {
-		return this.nextBatch(batchSize, [this.testImages, this.testLabels], () => {
+		return this.nextBatch(batchSize, this.testImages, this.testLabels, () => {
 			this.shuffledTestIndex =
 					(this.shuffledTestIndex + 1) % this.testIndices.length
 			return this.testIndices[this.shuffledTestIndex]
 		})
 	}
 	
-	nextBatch(batchSize, data, index) {
+	nextBatch(batchSize, allImages, allLabels, index) {
 		const batchImagesArray = new Float32Array(batchSize * DIGIT_SIZE)
 		const batchLabelsArray = new Uint8Array(batchSize * NUM_CLASSES)
 		
 		for (let i = 0; i < batchSize; i++) {
 			const idx = index()
 			
-			const image = data[0].slice(idx * DIGIT_SIZE, idx * DIGIT_SIZE + DIGIT_SIZE)
+			const image = allImages.slice(idx * DIGIT_SIZE, idx * DIGIT_SIZE + DIGIT_SIZE)
 			batchImagesArray.set(image, i * DIGIT_SIZE)
 			
-			const label = data[1].slice(idx * NUM_CLASSES, idx * NUM_CLASSES + NUM_CLASSES)
+			const label = allLabels.slice(idx * NUM_CLASSES, idx * NUM_CLASSES + NUM_CLASSES)
 			batchLabelsArray.set(label, i * NUM_CLASSES)
 		}
 		
