@@ -1,4 +1,4 @@
-import {MnistData} from './data.js'
+import {MnistData, DIGIT_WIDTH, DIGIT_HEIGHT, NUM_CLASSES} from './data.js'
 
 async function showExamples(data) {
 	// Create a container in the visor
@@ -8,39 +8,46 @@ async function showExamples(data) {
 	// Get the examples
 	const examples = data.nextTestBatch(20)
 	const numExamples = examples.xs.shape[0]
-	
+	console.log(examples.xs)
 	// Create a canvas element to render each example
 	for (let i = 0; i < numExamples; i++) {
-		const imageTensor = tf.tidy(() => {
-			// Reshape the image to 28x28 px
-			return examples.xs
-					.slice([i, 0], [1, examples.xs.shape[1]])
-					.reshape([28, 28, 1])
-		})
+			// Reshape the image to DIGIT_HEIGHT x DIGIT_WIDTH px
+		const imageTensor = tf.tidy(() =>
+				examples.xs
+						.slice([i, 0], [1, examples.xs.shape[1]])
+						.reshape([DIGIT_HEIGHT, DIGIT_WIDTH, 1]))
+		
+		const labelTensor = tf.tidy(() =>
+				examples.labels
+						.slice([i, 0], [1, examples.labels.shape[1]])
+						.reshape([10, 1]))
+		
+		console.log(labelTensor.argMax().arraySync()[0])
 		
 		const canvas = document.createElement('canvas')
-		canvas.width = 28
-		canvas.height = 28
+		canvas.width = DIGIT_WIDTH
+		canvas.height = DIGIT_HEIGHT
 		canvas.style = 'margin: 4px'
 		await tf.browser.toPixels(imageTensor, canvas)
 		surface.drawArea.appendChild(canvas)
 		
 		imageTensor.dispose()
+		labelTensor.dispose()
 	}
 }
 
 function getModel() {
 	const model = tf.sequential()
 	
-	const IMAGE_WIDTH = 28
-	const IMAGE_HEIGHT = 28
+	const IMAGE_WIDTH = DIGIT_WIDTH
+	const IMAGE_HEIGHT = DIGIT_HEIGHT
 	const IMAGE_CHANNELS = 1
 	
 	// In the first layer of our convolutional neural network we have
 	// to specify the input shape. Then we specify some parameters for
 	// the convolution operation that takes place in this layer.
 	model.add(tf.layers.conv2d({
-		inputShape: [IMAGE_WIDTH, IMAGE_HEIGHT, IMAGE_CHANNELS],
+		inputShape: [IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS],
 		kernelSize: 5,
 		filters: 8,
 		strides: 1,
@@ -70,7 +77,7 @@ function getModel() {
 	
 	// Our last layer is a dense layer which has 10 output units, one for each
 	// output class (i.e. 0, 1, 2, 3, 4, 5, 6, 7, 8, 9).
-	const NUM_OUTPUT_CLASSES = 10
+	const NUM_OUTPUT_CLASSES = NUM_CLASSES
 	model.add(tf.layers.dense({
 		units: NUM_OUTPUT_CLASSES,
 		kernelInitializer: 'varianceScaling',
@@ -97,26 +104,27 @@ async function train(model, data) {
 	}
 	const fitCallbacks = tfvis.show.fitCallbacks(container, metrics)
 	
-	const BATCH_SIZE = 512
-	const TRAIN_DATA_SIZE = 5500
-	const TEST_DATA_SIZE = 1000
+	const BATCH_SIZE = 20
+	const TRAIN_DATA_SIZE = 54
+	const TEST_DATA_SIZE = 20
 	
 	const [trainXs, trainYs] = tf.tidy(() => {
 		const d = data.nextTrainBatch(TRAIN_DATA_SIZE)
 		return [
-			d.xs.reshape([TRAIN_DATA_SIZE, 28, 28, 1]),
+			d.xs.reshape([TRAIN_DATA_SIZE, DIGIT_HEIGHT, DIGIT_WIDTH, 1]),
 			d.labels,
 		]
 	})
 	
 	const [testXs, testYs] = tf.tidy(() => {
 		const d = data.nextTestBatch(TEST_DATA_SIZE)
+		//console.log(d.xs)
 		return [
-			d.xs.reshape([TEST_DATA_SIZE, 28, 28, 1]),
+			d.xs.reshape([TEST_DATA_SIZE,  DIGIT_HEIGHT, DIGIT_WIDTH, 1]),
 			d.labels,
 		]
 	})
-	
+	console.log('XXXXXXXXXXXXXXXXXXXXXXXXXXXX')
 	return model.fit(trainXs, trainYs, {
 		batchSize: BATCH_SIZE,
 		validationData: [testXs, testYs],
@@ -128,9 +136,9 @@ async function train(model, data) {
 
 const classNames = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
 
-function doPrediction(model, data, testDataSize = 500) {
-	const IMAGE_WIDTH = 28
-	const IMAGE_HEIGHT = 28
+function doPrediction(model, data, testDataSize = 50) {
+	const IMAGE_WIDTH =  DIGIT_WIDTH
+	const IMAGE_HEIGHT =  DIGIT_HEIGHT
 	const testData = data.nextTestBatch(testDataSize)
 	const testxs = testData.xs.reshape([testDataSize, IMAGE_WIDTH, IMAGE_HEIGHT, 1])
 	const labels = testData.labels.argMax([-1])
@@ -163,13 +171,13 @@ async function showConfusion(model, data) {
 async function run() {
 	const data = new MnistData()
 	await data.load()
-	//await showExamples(data)
+	await showExamples(data)
 	
 	const model = getModel()
 	tfvis.show.modelSummary({name: 'Model Architecture'}, model)
-	
+
 	await train(model, data)
-	
+
 	await showAccuracy(model, data)
 	await showConfusion(model, data)
 }
