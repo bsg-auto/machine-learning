@@ -7,3 +7,4 @@ node_modules/
 /mnist_images.png
 /mnist_labels_uint8
 /captchas/
+/datasets/

@@ -1,13 +1,12 @@
+import allLabels from './labels.js'
+
 'use strict'
-
-import labels from './labels.js'
-
 const IMAGE_WIDTH = 100
 const IMAGE_HEIGHT = 32
 const IMAGE_SIZE = IMAGE_WIDTH * IMAGE_HEIGHT
 
 const DIGITS_RECTS_OFFSETS = [20, 32, 44, 56, 68]
-const NUM_DIGITS_PER_IMAGE = DIGITS_RECTS_OFFSETS.length
+export const NUM_DIGITS_PER_IMAGE = DIGITS_RECTS_OFFSETS.length  // 5
 const DIGITS_RECTS_TOP = 6
 const DIGIT_ACTUAL_WIDTH = 14
 export const DIGIT_WIDTH = 20
@@ -15,8 +14,8 @@ export const DIGIT_HEIGHT = 20
 const DIGIT_SIZE = DIGIT_WIDTH * DIGIT_HEIGHT
 
 export const NUM_CLASSES = 10
-const NUM_IMAGES = labels.length
-const NUM_TRAIN_IMAGES = 850
+const NUM_IMAGES = allLabels.length
+const NUM_TRAIN_IMAGES = 1015 //850
 
 export const NUM_DATASET_ELEMENTS = NUM_IMAGES * NUM_DIGITS_PER_IMAGE
 export const NUM_TRAIN_ELEMENTS = NUM_TRAIN_IMAGES * NUM_DIGITS_PER_IMAGE
@@ -37,6 +36,39 @@ export default class MnistData {
 	}
 	
 	async load() {
+		// const {datasetImages, datasetLabels} = await this.readStoreAndGetDatasetsFromUserData()
+		const {datasetImages, datasetLabels} = await this.loadStoredDatasets()
+		
+		this.datasetImages = datasetImages
+		this.datasetLabels = datasetLabels
+		
+		// Create shuffled indices into the train/test set for when we select a
+		// random dataset element for training / validation.
+		this.trainIndices = tf.util.createShuffledIndices(NUM_TRAIN_ELEMENTS)
+		this.testIndices = tf.util.createShuffledIndices(NUM_TEST_ELEMENTS)
+		
+		// Slice the the images and labels into train and test sets.
+		const bound1 = NUM_TRAIN_ELEMENTS * DIGIT_SIZE
+		const bound2 = NUM_TRAIN_ELEMENTS * NUM_CLASSES
+		
+		this.trainImages = this.datasetImages.slice(0, bound1)
+		this.testImages = this.datasetImages.slice(bound1)
+		this.trainLabels = this.datasetLabels.slice(0, bound2)
+		this.testLabels = this.datasetLabels.slice(bound2)
+	}
+	
+	async loadStoredDatasets() {
+		return {
+			datasetLabels: new Uint8Array(await (await
+					fetch('datasets/bashgah-labels-dataset@1398-11-16.bin')).arrayBuffer()
+			),
+			datasetImages: new Float32Array(await (await
+					fetch('datasets/bashgah-images-dataset@1398-11-16.bin')).arrayBuffer()
+			),
+		}
+	}
+	
+	async readStoreAndGetDatasetsFromUserData() {
 		const imgRequests = new Array(NUM_IMAGES)
 		const imagesPixels = new Array(NUM_IMAGES)
 		
@@ -103,7 +135,7 @@ export default class MnistData {
 							}
 						}
 						
-						img.src = `captchas/1/${labels[i]}.jpg`
+						img.src = `captchas/1/${allLabels[i]}.jpg`
 					}
 			)
 		}
@@ -112,13 +144,12 @@ export default class MnistData {
 		
 		// console.log(imagesPixels)
 		const imageNumPixels = imagesPixels[0].length
-		this.datasetImages = new Float32Array(imagesPixels.length * imageNumPixels)
+		const datasetImages = new Float32Array(imagesPixels.length * imageNumPixels)
 		
 		// Concatenate all pixels to a huge linear array
 		for (const [i, imagePixels] of imagesPixels.entries())
-			this.datasetImages.set(imagePixels, i * imageNumPixels)
-		// console.log(this.datasetImages)
-		
+			datasetImages.set(imagePixels, i * imageNumPixels)
+		// console.log(datasetImages)
 		// const labelsOneHot = [...labels.join('')].map(digit => {
 		// 	const labelOneHot = new Uint8Array(NUM_CLASSES).fill(0)  // 0: 0%
 		// 	labelOneHot[(Number.parseInt(digit))] = 1  // 1: 100%
@@ -131,8 +162,8 @@ export default class MnistData {
 		// for (const [i, probabilityColumn] of labelsOneHot.entries())
 		// 	this.datasetLabels.set(probabilityColumn, i * NUM_CLASSES)
 		
-		const labelsS = labels.join('')
-		this.datasetLabels = Uint8Array.from(
+		const labelsS = allLabels.join('')
+		const datasetLabels = Uint8Array.from(
 				tf.oneHot(tf.tensor1d([...labelsS], 'int32'), NUM_CLASSES)
 				// Make it linear
 						.reshape([labelsS.length * NUM_CLASSES])
@@ -140,34 +171,30 @@ export default class MnistData {
 		)
 		//console.log(this.datasetLabels)
 		
-		// Create shuffled indices into the train/test set for when we select a
-		// random dataset element for training / validation.
-		this.trainIndices = tf.util.createShuffledIndices(NUM_TRAIN_ELEMENTS)
-		this.testIndices = tf.util.createShuffledIndices(NUM_TEST_ELEMENTS)
+		const imagesUrl = window.URL.createObjectURL(new Blob([datasetImages]))
+		const labelsUrl = window.URL.createObjectURL(new Blob([datasetLabels]))
 		
-		// Slice the the images and labels into train and test sets.
-		const bound1 = NUM_TRAIN_ELEMENTS * DIGIT_SIZE
-		const bound2 =  NUM_TRAIN_ELEMENTS * NUM_CLASSES
-		
-		this.trainImages = this.datasetImages.slice(0, bound1)
-		this.testImages = this.datasetImages.slice(bound1)
-		this.trainLabels = this.datasetLabels.slice(0, bound2)
-		this.testLabels = this.datasetLabels.slice(bound2)
+		const a = document.createElement('a')
+		a.download = 'labels-dataset.bin'
+		a.href = labelsUrl
+		a.click()
+		a.download = 'images-dataset.bin'
+		a.href = imagesUrl
+		a.click()
+		return {datasetImages, datasetLabels}
 	}
 	
 	nextTrainBatch(batchSize) {
 		return this.nextBatch(
 				batchSize, this.trainImages, this.trainLabels, () => {
-					this.shuffledTrainIndex =
-							(this.shuffledTrainIndex + 1) % this.trainIndices.length
+					this.shuffledTrainIndex = (this.shuffledTrainIndex + 1) % this.trainIndices.length
 					return this.trainIndices[this.shuffledTrainIndex]
 				})
 	}
 	
 	nextTestBatch(batchSize) {
 		return this.nextBatch(batchSize, this.testImages, this.testLabels, () => {
-			this.shuffledTestIndex =
-					(this.shuffledTestIndex + 1) % this.testIndices.length
+			this.shuffledTestIndex = (this.shuffledTestIndex + 1) % this.testIndices.length
 			return this.testIndices[this.shuffledTestIndex]
 		})
 	}
@@ -175,6 +202,7 @@ export default class MnistData {
 	nextBatch(batchSize, allImages, allLabels, index) {
 		const batchImagesArray = new Float32Array(batchSize * DIGIT_SIZE)
 		const batchLabelsArray = new Uint8Array(batchSize * NUM_CLASSES)
+		const batchIndices = new Uint32Array(batchSize)
 		
 		for (let i = 0; i < batchSize; i++) {
 			const idx = index()
@@ -184,11 +212,13 @@ export default class MnistData {
 			
 			const label = allLabels.slice(idx * NUM_CLASSES, idx * NUM_CLASSES + NUM_CLASSES)
 			batchLabelsArray.set(label, i * NUM_CLASSES)
+			
+			batchIndices.set([idx], i)
 		}
 		
 		const xs = tf.tensor2d(batchImagesArray, [batchSize, DIGIT_SIZE])
 		const labels = tf.tensor2d(batchLabelsArray, [batchSize, NUM_CLASSES])
 		
-		return {xs, labels}
+		return {xs, labels, indices: batchIndices}
 	}
 }

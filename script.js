@@ -1,3 +1,4 @@
+import allLabels from './labels.js'
 import MnistData, {
 	DIGIT_WIDTH,
 	DIGIT_HEIGHT,
@@ -5,9 +6,16 @@ import MnistData, {
 	NUM_DATASET_ELEMENTS,
 	NUM_TEST_ELEMENTS,
 	NUM_TRAIN_ELEMENTS,
+	NUM_DIGITS_PER_IMAGE,
 } from './data.js'
 
-async function showExamples(data) {
+'use strict'
+
+const BLACK = '\x1b[30m'
+const RED = '\x1b[31m'
+const BG_CYAN = '\x1b[46m'
+
+function showExamples(data) {
 	// Create a container in the visor
 	const surface =
 			tfvis.visor().surface({name: 'Input Data Examples', tab: 'Input Data'})
@@ -15,7 +23,7 @@ async function showExamples(data) {
 	// Get the examples
 	const examples = data.nextTestBatch(20)
 	const numExamples = examples.xs.shape[0]
-
+	
 	// Create a canvas element to render each example
 	for (let i = 0; i < numExamples; i++) {
 		// Reshape the image to DIGIT_HEIGHT x DIGIT_WIDTH px
@@ -30,16 +38,17 @@ async function showExamples(data) {
 						.reshape([10, 1]))
 		
 		console.log(labelTensor.argMax().arraySync()[0])
+		labelTensor.dispose()
 		
 		const canvas = document.createElement('canvas')
 		canvas.width = DIGIT_WIDTH
 		canvas.height = DIGIT_HEIGHT
 		canvas.style = 'margin: 4px'
-		await tf.browser.toPixels(imageTensor, canvas)
-		surface.drawArea.appendChild(canvas)
 		
-		imageTensor.dispose()
-		labelTensor.dispose()
+		tf.browser.toPixels(imageTensor, canvas).then(_ => {
+			surface.drawArea.appendChild(canvas)
+			imageTensor.dispose()
+		})
 	}
 }
 
@@ -134,7 +143,7 @@ async function train(model, data) {
 	
 	return model.fit(trainXs, trainYs, {
 		batchSize: BATCH_SIZE,
-		validationData: [testXs, testYs],
+		//validationData: [testXs, testYs],
 		epochs: 10,
 		shuffle: true,
 		callbacks: fitCallbacks,
@@ -143,15 +152,108 @@ async function train(model, data) {
 
 const classNames = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
 
+let iii = 0
+
 function doPrediction(model, data, testDataSize = 500) {
 	const IMAGE_WIDTH = DIGIT_WIDTH
 	const IMAGE_HEIGHT = DIGIT_HEIGHT
 	const testData = data.nextTestBatch(testDataSize)
-	const testxs = testData.xs.reshape([testDataSize, IMAGE_WIDTH, IMAGE_HEIGHT, 1])
+	const testXs = testData.xs.reshape([testDataSize, IMAGE_WIDTH, IMAGE_HEIGHT, 1])
 	const labels = testData.labels.argMax([-1])
-	const preds = model.predict(testxs).argMax([-1])
+	const predictResult = model.predict(testXs)
+	const preds = predictResult.argMax([-1])
 	
-	testxs.dispose()
+	const predictResultAr = predictResult.arraySync()
+	predictResult.dispose()
+	
+	const labelsAr = labels.arraySync()
+	const predsAr = preds.arraySync()
+	
+	const surface = tfvis.visor().surface({name: 'Wrong predictions', tab: 'Evaluation'})
+	
+	let minCorrectProbability = 1
+	let maxWrongProbability = 0
+	const corrects = []
+	const wrongs1 = []
+	const wrongs2 = []
+	
+	for (let i = 0; i < labelsAr.length; i++) {
+		const label = labelsAr[i]
+		const pred = predsAr[i]
+		const probabilities = predictResultAr[i]
+		
+		if (label === pred) {
+			if (probabilities[pred] < minCorrectProbability) minCorrectProbability = probabilities[pred]
+			corrects.push({x: label + Math.random(), y: probabilities[pred] * 100})
+			continue
+		}
+		
+		wrongs1.push({x: label + Math.random(), y: probabilities[pred] * 100})
+		wrongs2.push({x: pred + Math.random(), y: probabilities[pred] * 100})
+		
+		if (probabilities[pred] > maxWrongProbability) maxWrongProbability = probabilities[pred]
+		
+		const idx = testData.indices[i]
+		const iAllLabels = Math.floor((NUM_TRAIN_ELEMENTS + idx) / NUM_DIGITS_PER_IMAGE)
+		
+		const nth = idx % NUM_DIGITS_PER_IMAGE
+		const number = allLabels[iAllLabels]
+		console.log([...number].map((ch, i) => i === nth ? `${BG_CYAN}${ch}${BLACK}` : ch).join(''))
+		
+		console.log(`❌ ${RED}${pred}${BLACK}`)
+		//-----------------------------------------------/
+		
+		const probs = Object.entries({...probabilities.filter(p => p >= probabilities[label])})
+		console.log(probs
+						.reduce((acc, [digit, p]) => {
+							acc[digit] = `${Math.round(p * 10000) / 100}%`
+							return acc
+						}, {})
+		)
+		console.log()
+		//-----------------------------------------------/
+		
+		const imageTensor = tf.tidy(() => {
+			const original = testXs
+					.slice([i, 0], [1, testXs.shape[1]])
+					.reshape([DIGIT_HEIGHT, DIGIT_WIDTH, 1])
+			
+			return tf.onesLike(original).sub(original)
+		})
+		
+		const canvas = document.createElement('canvas')
+		canvas.width = DIGIT_WIDTH
+		canvas.height = DIGIT_HEIGHT
+		canvas.style = 'margin: 4px'
+		canvas.dataset.label = label
+		canvas.dataset.pred = pred
+		
+		const span = document.createElement('span')
+		const format = text => `<span style="background-color: aqua;">${text}</span>`
+		span.innerHTML =
+				[...number].map((ch, i) => i === nth ? format(ch) : ch).join('') +
+				`<span style="color: red; margin-left: 8px">${pred}</span>`
+		span.style = 'font-size: 1.4em;  font-weight: bold; margin-left: 12px'
+		
+		const div = document.createElement('div')
+		div.appendChild(canvas)
+		div.appendChild(span)
+		
+		tf.browser.toPixels(imageTensor, canvas).then(_ => {
+			surface.drawArea.appendChild(div)
+			imageTensor.dispose()
+		})
+	}
+	testXs.dispose()
+	
+	console.log(minCorrectProbability)
+	console.log(maxWrongProbability)
+
+	const chartData = { values: [corrects, wrongs1, wrongs2], series: ['C', 'W1', 'W2'] }
+	
+	const chartSurface = tfvis.visor().surface({name: 'Scatterplot', tab: 'Charts'})
+	tfvis.render.scatterplot(chartSurface, chartData)
+	
 	return [preds, labels]
 }
 
@@ -178,15 +280,17 @@ async function showConfusion(model, data) {
 async function run() {
 	const data = new MnistData()
 	await data.load()
-	await showExamples(data)
+	showExamples(data)
 	
 	const model = getModel()
+	// const model = await tf.loadLayersModel('trained-models/bashgah-captcha@1398-11-15@850.json')
 	tfvis.show.modelSummary({name: 'Model Architecture'}, model)
-	
+
 	await train(model, data)
-	
-	await showAccuracy(model, data)
-	await showConfusion(model, data)
+	await model.save('downloads://bashgah-captcha@1398-11-16@1015')
+
+	// await showAccuracy(model, data)
+	// await showConfusion(model, data)
 }
 
 document.addEventListener('DOMContentLoaded', run)
