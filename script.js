@@ -143,7 +143,7 @@ async function train(model, data) {
 	
 	return model.fit(trainXs, trainYs, {
 		batchSize: BATCH_SIZE,
-		//validationData: [testXs, testYs],
+		validationData: [testXs, testYs],
 		epochs: 10,
 		shuffle: true,
 		callbacks: fitCallbacks,
@@ -152,13 +152,11 @@ async function train(model, data) {
 
 const classNames = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
 
-let iii = 0
-
 function doPrediction(model, data, testDataSize = 500) {
 	const IMAGE_WIDTH = DIGIT_WIDTH
 	const IMAGE_HEIGHT = DIGIT_HEIGHT
 	const testData = data.nextTestBatch(testDataSize)
-	const testXs = testData.xs.reshape([testDataSize, IMAGE_WIDTH, IMAGE_HEIGHT, 1])
+	const testXs = testData.xs.reshape([testDataSize, IMAGE_HEIGHT, IMAGE_WIDTH, 1])
 	const labels = testData.labels.argMax([-1])
 	const predictResult = model.predict(testXs)
 	const preds = predictResult.argMax([-1])
@@ -197,7 +195,7 @@ function doPrediction(model, data, testDataSize = 500) {
 		const iAllLabels = Math.floor((NUM_TRAIN_ELEMENTS + idx) / NUM_DIGITS_PER_IMAGE)
 		
 		const nth = idx % NUM_DIGITS_PER_IMAGE
-		const number = allLabels[iAllLabels]
+		const number = allLabels[iAllLabels].substr(0, NUM_DIGITS_PER_IMAGE)
 		console.log([...number].map((ch, i) => i === nth ? `${BG_CYAN}${ch}${BLACK}` : ch).join(''))
 		
 		console.log(`❌ ${RED}${pred}${BLACK}`)
@@ -283,14 +281,14 @@ async function run() {
 	showExamples(data)
 	
 	const model = getModel()
-	// const model = await tf.loadLayersModel('trained-models/bashgah-captcha@1398-11-15@850.json')
+	// const model = await tf.loadLayersModel('trained-models/bashgah-captcha@1398-11-16@1015.json')
 	tfvis.show.modelSummary({name: 'Model Architecture'}, model)
 
 	await train(model, data)
 	await model.save('downloads://bashgah-captcha@1398-11-16@1015')
 
-	// await showAccuracy(model, data)
-	// await showConfusion(model, data)
+	await showAccuracy(model, data)
+	await showConfusion(model, data)
 }
 
 document.addEventListener('DOMContentLoaded', run)

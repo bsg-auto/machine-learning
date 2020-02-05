@@ -15,7 +15,7 @@ const DIGIT_SIZE = DIGIT_WIDTH * DIGIT_HEIGHT
 
 export const NUM_CLASSES = 10
 const NUM_IMAGES = allLabels.length
-const NUM_TRAIN_IMAGES = 1015 //850
+const NUM_TRAIN_IMAGES = 850
 
 export const NUM_DATASET_ELEMENTS = NUM_IMAGES * NUM_DIGITS_PER_IMAGE
 export const NUM_TRAIN_ELEMENTS = NUM_TRAIN_IMAGES * NUM_DIGITS_PER_IMAGE
@@ -36,11 +36,11 @@ export default class MnistData {
 	}
 	
 	async load() {
-		// const {datasetImages, datasetLabels} = await this.readStoreAndGetDatasetsFromUserData()
-		const {datasetImages, datasetLabels} = await this.loadStoredDatasets()
+		const {imagesDataset, labelsDataset} = await this.readStoreAndGetDatasetsFromUserData()
+		// const {imagesDataset, labelsDataset} = await this.loadStoredDatasets()
 		
-		this.datasetImages = datasetImages
-		this.datasetLabels = datasetLabels
+		this.imagesDataset = imagesDataset
+		this.labelsDataset = labelsDataset
 		
 		// Create shuffled indices into the train/test set for when we select a
 		// random dataset element for training / validation.
@@ -51,18 +51,18 @@ export default class MnistData {
 		const bound1 = NUM_TRAIN_ELEMENTS * DIGIT_SIZE
 		const bound2 = NUM_TRAIN_ELEMENTS * NUM_CLASSES
 		
-		this.trainImages = this.datasetImages.slice(0, bound1)
-		this.testImages = this.datasetImages.slice(bound1)
-		this.trainLabels = this.datasetLabels.slice(0, bound2)
-		this.testLabels = this.datasetLabels.slice(bound2)
+		this.trainImages = this.imagesDataset.slice(0, bound1)
+		this.testImages = this.imagesDataset.slice(bound1)
+		this.trainLabels = this.labelsDataset.slice(0, bound2)
+		this.testLabels = this.labelsDataset.slice(bound2)
 	}
 	
 	async loadStoredDatasets() {
 		return {
-			datasetLabels: new Uint8Array(await (await
+			labelsDataset: new Uint8Array(await (await
 					fetch('datasets/bashgah-labels-dataset@1398-11-16.bin')).arrayBuffer()
 			),
-			datasetImages: new Float32Array(await (await
+			imagesDataset: new Float32Array(await (await
 					fetch('datasets/bashgah-images-dataset@1398-11-16.bin')).arrayBuffer()
 			),
 		}
@@ -70,7 +70,7 @@ export default class MnistData {
 	
 	async readStoreAndGetDatasetsFromUserData() {
 		const imgRequests = new Array(NUM_IMAGES)
-		const imagesPixels = new Array(NUM_IMAGES)
+		const imagesRawData = new Array(NUM_IMAGES)
 		
 		for (let i = 0; i < NUM_IMAGES; i++) {
 			imgRequests[i] = new Promise((resolve, reject) => {
@@ -90,14 +90,14 @@ export default class MnistData {
 							canvas.width = w
 							canvas.height = h
 							
-							ctx.fillStyle = 'white'
-							ctx.fillRect(0, 0, w, h)
+							// ctx.fillStyle = 'white'
+							// ctx.fillRect(0, 0, w, h)
 							ctx.drawImage(img, 0, 0)
 							
 							// linear array:
-							const imagePixels = new Float32Array(DIGIT_SIZE * NUM_DIGITS_PER_IMAGE)
+							const imageRawData = new Float32Array(DIGIT_SIZE * NUM_DIGITS_PER_IMAGE)
 							
-							const pixels = ctx.getImageData(0, 0, w, h).data
+							const rawData = ctx.getImageData(0, 0, w, h).data
 							
 							const top = DIGITS_RECTS_TOP
 							const bottom = top + DIGIT_HEIGHT
@@ -107,72 +107,82 @@ export default class MnistData {
 								const extraPixels = DIGIT_WIDTH - (right - left)
 								
 								for (let y = top; y < bottom; y++) {
-									for (let i = 0; i < extraPixels / 2; i++) imagePixels[index++] = 0
+									for (let i = 0; i < extraPixels / 2; i++) imageRawData[index++] = 0
 									
 									for (let x = left; x < right; x++) {
-										// All channels hold an equal value since the image is almost grayscale, so
-										// just read the blue channel (red + 2).
 										const redIndex = (x + y * IMAGE_WIDTH) * 4
-										imagePixels[index++] = (255 - pixels[redIndex + 2]) / 255
+										
+										const rF = rawData[redIndex] / 255  // the Red   value of Foreground
+										const gF = rawData[redIndex + 1] / 255  // the Green value of Foreground
+										const bF = rawData[redIndex + 2] / 255  // the Blue  value of Foreground
+										const a = rawData[redIndex + 3] / 255  // the Alpha value of Foreground
+										
+										// Calculate the color on a white (0xFFFFFF) background
+										const r = combineColors(rF, 1, a)
+										const g = combineColors(gF, 1, a)
+										const b = combineColors(bF, 1, a)
+										
+										// Because the image is almost grayscale, we only include one channel ((r+g+b)/3):
+										imageRawData[index++] = 1 - ((r + g + b) / 3)
 										// if (i===0 && index < 11) {
 										// 	console.log(index-1)
 										// 	console.log(x)
 										// 	console.log(y)
 										// 	console.log(redIndex)
-										// 	console.log(pixels[redIndex])
-										// 	console.log(pixels[redIndex+1])
-										// 	console.log(pixels[redIndex+2])
-										// 	console.log(pixels[redIndex+3])
+										// 	console.log(rawData[redIndex])
+										// 	console.log(rawData[redIndex+1])
+										// 	console.log(rawData[redIndex+2])
+										// 	console.log(rawData[redIndex+3])
 										// 	console.log('----------------------')
 										// }
 									}
 									
-									for (let i = 0; i < extraPixels / 2; i++) imagePixels[index++] = 0
+									for (let i = 0; i < extraPixels / 2; i++) imageRawData[index++] = 0
 								}
 								
-								imagesPixels[i] = imagePixels
+								imagesRawData[i] = imageRawData
 								resolve()
 							}
 						}
 						
-						img.src = `captchas/1/${allLabels[i]}.jpg`
+						img.src = `captchas/1/${allLabels[i]}.png`
 					}
 			)
 		}
 		
 		await Promise.all(imgRequests)
 		
-		// console.log(imagesPixels)
-		const imageNumPixels = imagesPixels[0].length
-		const datasetImages = new Float32Array(imagesPixels.length * imageNumPixels)
+		// console.log(imagesRawData)
+		const imageNumPixels = imagesRawData[0].length
+		const imagesDataset = new Float32Array(imagesRawData.length * imageNumPixels)
 		
 		// Concatenate all pixels to a huge linear array
-		for (const [i, imagePixels] of imagesPixels.entries())
-			datasetImages.set(imagePixels, i * imageNumPixels)
-		// console.log(datasetImages)
+		for (const [i, imageRawData] of imagesRawData.entries())
+			imagesDataset.set(imageRawData, i * imageNumPixels)
+		// console.log(imagesDataset)
 		// const labelsOneHot = [...labels.join('')].map(digit => {
 		// 	const labelOneHot = new Uint8Array(NUM_CLASSES).fill(0)  // 0: 0%
 		// 	labelOneHot[(Number.parseInt(digit))] = 1  // 1: 100%
 		// 	return labelOneHot
 		// })
 		//
-		// this.datasetLabels = new Uint8Array(labelsOneHot.length * NUM_CLASSES)
+		// this.labelsDataset = new Uint8Array(labelsOneHot.length * NUM_CLASSES)
 		//
 		// // Concatenate all probability columns to a huge linear array
 		// for (const [i, probabilityColumn] of labelsOneHot.entries())
-		// 	this.datasetLabels.set(probabilityColumn, i * NUM_CLASSES)
+		// 	this.labelsDataset.set(probabilityColumn, i * NUM_CLASSES)
 		
-		const labelsS = allLabels.join('')
-		const datasetLabels = Uint8Array.from(
+		const labelsS = allLabels.map(label => label.substr(0, NUM_DIGITS_PER_IMAGE)).join('')
+		const labelsDataset = Uint8Array.from(
 				tf.oneHot(tf.tensor1d([...labelsS], 'int32'), NUM_CLASSES)
 				// Make it linear
 						.reshape([labelsS.length * NUM_CLASSES])
 						.dataSync()
 		)
-		//console.log(this.datasetLabels)
+		//console.log(this.labelsDataset)
 		
-		const imagesUrl = window.URL.createObjectURL(new Blob([datasetImages]))
-		const labelsUrl = window.URL.createObjectURL(new Blob([datasetLabels]))
+		const imagesUrl = window.URL.createObjectURL(new Blob([imagesDataset]))
+		const labelsUrl = window.URL.createObjectURL(new Blob([labelsDataset]))
 		
 		const a = document.createElement('a')
 		a.download = 'labels-dataset.bin'
@@ -181,7 +191,7 @@ export default class MnistData {
 		a.download = 'images-dataset.bin'
 		a.href = imagesUrl
 		a.click()
-		return {datasetImages, datasetLabels}
+		return {imagesDataset, labelsDataset}
 	}
 	
 	nextTrainBatch(batchSize) {
@@ -221,4 +231,8 @@ export default class MnistData {
 		
 		return {xs, labels, indices: batchIndices}
 	}
+}
+
+function combineColors(foreColor, backColor, alpha) {
+	return alpha * foreColor + (1 - alpha) * backColor
 }

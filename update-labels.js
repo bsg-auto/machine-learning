@@ -13,7 +13,7 @@ fs.writeFileSync('./labels.js',
 		'\n' +
 		'export default ' +
 		JSON.stringify(
-				shuffle(fs.readdirSync('./captchas/1')).map(name => name.substr(0,5)),
+				shuffle(fs.readdirSync('./captchas/1')).map(name => name.substr(0,11)),
 				null, '\t')
 				.replace(/"/g, "'") +
 		'\n'
