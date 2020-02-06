@@ -14,14 +14,12 @@ export const DIGIT_HEIGHT = 20
 const DIGIT_SIZE = DIGIT_WIDTH * DIGIT_HEIGHT
 
 export const NUM_CLASSES = 10
-const NUM_IMAGES = allLabels.length
-const NUM_TRAIN_IMAGES = 850
+export const NUM_IMAGES = allLabels.length
+const NUM_TRAIN_IMAGES = 10073 //8000
 
 export const NUM_DATASET_ELEMENTS = NUM_IMAGES * NUM_DIGITS_PER_IMAGE
 export const NUM_TRAIN_ELEMENTS = NUM_TRAIN_IMAGES * NUM_DIGITS_PER_IMAGE
 export const NUM_TEST_ELEMENTS = NUM_DATASET_ELEMENTS - NUM_TRAIN_ELEMENTS
-
-const MNIST_LABELS_PATH = 'mnist_labels_uint8' //'https://storage.googleapis.com/learnjs-data/model-builder/mnist_labels_uint8'
 
 /**
  * A class that fetches the sprited MNIST dataset and returns shuffled batches.
@@ -58,17 +56,34 @@ export default class MnistData {
 	}
 	
 	async loadStoredDatasets() {
+		console.log('Loading stored datasets.')
 		return {
 			labelsDataset: new Uint8Array(await (await
-					fetch('datasets/bashgah-labels-dataset@1398-11-16.bin')).arrayBuffer()
+					fetch('datasets/bashgah-labels-dataset@1398-11-17@2213.bin')).arrayBuffer()
 			),
 			imagesDataset: new Float32Array(await (await
-					fetch('datasets/bashgah-images-dataset@1398-11-16.bin')).arrayBuffer()
+					fetch('datasets/bashgah-images-dataset@1398-11-17@2213.bin')).arrayBuffer()
 			),
 		}
 	}
 	
 	async readStoreAndGetDatasetsFromUserData() {
+		console.log("Reading datasets from user's data then storing it ...")
+		
+		const labelsS = allLabels.map(label => label.substr(0, NUM_DIGITS_PER_IMAGE)).join('')
+		
+		const labelsDataset = new Uint8Array(labelsS.length * NUM_CLASSES)
+		let i = 0
+		// Concatenate all one-hots into a huge linear array:
+		for (const label of labelsS) {
+			const oneHotLabel = new Uint8Array(NUM_CLASSES).fill(0)  // 0: 0%
+			oneHotLabel[(Number.parseInt(label))] = 1  // 1: 100%
+			labelsDataset.set(oneHotLabel, NUM_CLASSES * i++)
+		}
+		
+		//console.log(labelsDataset)
+		//--------------------------------------------------------/
+		
 		const imgRequests = new Array(NUM_IMAGES)
 		const imagesRawData = new Array(NUM_IMAGES)
 		
@@ -160,35 +175,16 @@ export default class MnistData {
 		for (const [i, imageRawData] of imagesRawData.entries())
 			imagesDataset.set(imageRawData, i * imageNumPixels)
 		// console.log(imagesDataset)
-		// const labelsOneHot = [...labels.join('')].map(digit => {
-		// 	const labelOneHot = new Uint8Array(NUM_CLASSES).fill(0)  // 0: 0%
-		// 	labelOneHot[(Number.parseInt(digit))] = 1  // 1: 100%
-		// 	return labelOneHot
-		// })
-		//
-		// this.labelsDataset = new Uint8Array(labelsOneHot.length * NUM_CLASSES)
-		//
-		// // Concatenate all probability columns to a huge linear array
-		// for (const [i, probabilityColumn] of labelsOneHot.entries())
-		// 	this.labelsDataset.set(probabilityColumn, i * NUM_CLASSES)
-		
-		const labelsS = allLabels.map(label => label.substr(0, NUM_DIGITS_PER_IMAGE)).join('')
-		const labelsDataset = Uint8Array.from(
-				tf.oneHot(tf.tensor1d([...labelsS], 'int32'), NUM_CLASSES)
-				// Make it linear
-						.reshape([labelsS.length * NUM_CLASSES])
-						.dataSync()
-		)
-		//console.log(this.labelsDataset)
+		//--------------------------------------------------------/
 		
 		const imagesUrl = window.URL.createObjectURL(new Blob([imagesDataset]))
 		const labelsUrl = window.URL.createObjectURL(new Blob([labelsDataset]))
 		
 		const a = document.createElement('a')
-		a.download = 'labels-dataset.bin'
+		a.download = `bashgah-images-dataset@1398-11-17@${NUM_IMAGES}.bin`
 		a.href = labelsUrl
 		a.click()
-		a.download = 'images-dataset.bin'
+		a.download = `bashgah-labels-dataset@1398-11-17@${NUM_IMAGES}.bin`
 		a.href = imagesUrl
 		a.click()
 		return {imagesDataset, labelsDataset}
@@ -213,7 +209,7 @@ export default class MnistData {
 		const batchImagesArray = new Float32Array(batchSize * DIGIT_SIZE)
 		const batchLabelsArray = new Uint8Array(batchSize * NUM_CLASSES)
 		const batchIndices = new Uint32Array(batchSize)
-		
+
 		for (let i = 0; i < batchSize; i++) {
 			const idx = index()
 			
@@ -225,7 +221,6 @@ export default class MnistData {
 			
 			batchIndices.set([idx], i)
 		}
-		
 		const xs = tf.tensor2d(batchImagesArray, [batchSize, DIGIT_SIZE])
 		const labels = tf.tensor2d(batchLabelsArray, [batchSize, NUM_CLASSES])
 		

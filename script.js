@@ -3,7 +3,7 @@ import MnistData, {
 	DIGIT_WIDTH,
 	DIGIT_HEIGHT,
 	NUM_CLASSES,
-	NUM_DATASET_ELEMENTS,
+	NUM_IMAGES,
 	NUM_TEST_ELEMENTS,
 	NUM_TRAIN_ELEMENTS,
 	NUM_DIGITS_PER_IMAGE,
@@ -143,7 +143,7 @@ async function train(model, data) {
 	
 	return model.fit(trainXs, trainYs, {
 		batchSize: BATCH_SIZE,
-		validationData: [testXs, testYs],
+		// validationData: [testXs, testYs],
 		epochs: 10,
 		shuffle: true,
 		callbacks: fitCallbacks,
@@ -152,7 +152,7 @@ async function train(model, data) {
 
 const classNames = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
 
-function doPrediction(model, data, testDataSize = 500) {
+function doPrediction(model, data, testDataSize = 1000) {
 	const IMAGE_WIDTH = DIGIT_WIDTH
 	const IMAGE_HEIGHT = DIGIT_HEIGHT
 	const testData = data.nextTestBatch(testDataSize)
@@ -195,10 +195,10 @@ function doPrediction(model, data, testDataSize = 500) {
 		const iAllLabels = Math.floor((NUM_TRAIN_ELEMENTS + idx) / NUM_DIGITS_PER_IMAGE)
 		
 		const nth = idx % NUM_DIGITS_PER_IMAGE
-		const number = allLabels[iAllLabels].substr(0, NUM_DIGITS_PER_IMAGE)
+		const number = allLabels[iAllLabels]//.substr(0, NUM_DIGITS_PER_IMAGE)
 		console.log([...number].map((ch, i) => i === nth ? `${BG_CYAN}${ch}${BLACK}` : ch).join(''))
 		
-		console.log(`❌ ${RED}${pred}${BLACK}`)
+		console.log(`❌ ${RED}${pred}${BLACK}`, '---', label)
 		//-----------------------------------------------/
 		
 		const probs = Object.entries({...probabilities.filter(p => p >= probabilities[label])})
@@ -208,7 +208,7 @@ function doPrediction(model, data, testDataSize = 500) {
 							return acc
 						}, {})
 		)
-		console.log()
+		console.log(' ')
 		//-----------------------------------------------/
 		
 		const imageTensor = tf.tidy(() => {
@@ -278,17 +278,17 @@ async function showConfusion(model, data) {
 async function run() {
 	const data = new MnistData()
 	await data.load()
-	showExamples(data)
+	// showExamples(data)
 	
 	const model = getModel()
 	// const model = await tf.loadLayersModel('trained-models/bashgah-captcha@1398-11-16@1015.json')
 	tfvis.show.modelSummary({name: 'Model Architecture'}, model)
 
 	await train(model, data)
-	await model.save('downloads://bashgah-captcha@1398-11-16@1015')
+	await model.save(`downloads://bashgah-captcha@1398-11-17@${NUM_IMAGES}`)
 
-	await showAccuracy(model, data)
-	await showConfusion(model, data)
+	// await showAccuracy(model, data)
+	// await showConfusion(model, data)
 }
 
 document.addEventListener('DOMContentLoaded', run)
